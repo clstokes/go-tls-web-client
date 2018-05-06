@@ -39,16 +39,21 @@ func realMain() int {
 func makeRequest(client http.Client, requestUrl string) {
 	resp, err := client.Get(requestUrl)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("Error requesting [%v]: %v", requestUrl, err)
+		return
+	}
+	if resp == nil || resp.StatusCode != 200 {
+		log.Printf("Request to [%v] returned [%v]", requestUrl, resp.StatusCode)
+		return
 	}
 	defer resp.Body.Close()
 
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Printf("Error requesting [%v]: %v", requestUrl, err)
+		log.Printf("Error reading response from [%v]: %v", requestUrl, err)
 	}
 
-	log.Println(string(data))
+	log.Printf("Request to [%v] returned [%v]: %v", requestUrl, resp.StatusCode, string(data))
 }
 
 func getClient(pathCa string) http.Client {
