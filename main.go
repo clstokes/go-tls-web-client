@@ -12,25 +12,29 @@ import (
 	"time"
 )
 
+type ClientOpts struct {
+	requestUrl       string
+	requestInterval  int
+	maxCrashDuration int
+	caPath           string
+}
+
 func main() {
 	os.Exit(realMain())
 }
 
 func realMain() int {
-	requestUrl := flag.String("request-url", "", "URL to request")
-	requestInterval := flag.Int("request-interval", 1, "interval in seconds to send requests")
-	maxCrashDuration := flag.Int("crash", 0, "maximum duration to wait before crashing")
-	caPath := flag.String("ca-path", "", "path to the CA certificate")
-	flag.Parse()
+	clientOpts := &ClientOpts{}
+	parseArgs(clientOpts)
 
-	if *maxCrashDuration != 0 {
-		setupCrashRoutine(*maxCrashDuration)
+	if clientOpts.maxCrashDuration != 0 {
+		setupCrashRoutine(clientOpts.maxCrashDuration)
 	}
-	client := getClient(*caPath)
+	client := getClient(clientOpts.caPath)
 
 	for true {
-		makeRequest(client, *requestUrl)
-		time.Sleep(time.Duration(*requestInterval) * time.Second)
+		makeRequest(client, clientOpts.requestUrl)
+		time.Sleep(time.Duration(clientOpts.requestInterval) * time.Second)
 	}
 
 	return 0
@@ -81,9 +85,17 @@ func setupCrashRoutine(maxCrashDuration int) {
 	rand.Seed(time.Now().Unix())
 	crashDuration := rand.Intn(maxCrashDuration)
 
-	log.Printf("Crashing in [%v] seconds", crashDuration)
+	log.Printf("Crashing in [%v] seconds...", crashDuration)
 	go func() {
 		time.Sleep(time.Duration(crashDuration) * time.Second)
 		log.Fatal("Crashing...")
 	}()
+}
+
+func parseArgs(client *ClientOpts) {
+	flag.StringVar(&client.requestUrl, "request-url", "", "URL to request")
+	flag.IntVar(&client.requestInterval, "request-interval", 1, "interval in seconds to send requests")
+	flag.IntVar(&client.maxCrashDuration, "crash", 0, "maximum duration to wait before crashing")
+	flag.StringVar(&client.caPath, "ca-path", "", "path to the CA certificate")
+	flag.Parse()
 }
