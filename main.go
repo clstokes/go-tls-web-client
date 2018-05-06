@@ -3,10 +3,13 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"flag"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"os"
+	"time"
 )
 
 func main() {
@@ -14,13 +17,41 @@ func main() {
 }
 
 func realMain() int {
-	serviceAddr := os.Getenv("SERVICE_ADDR")
-	if serviceAddr == "" {
-		log.Fatal("SERVICE_ADDR must be set and non-empty")
+	requestUrl := flag.String("request-url", "", "URL to request")
+	requestInterval := flag.Int("request-interval", 1, "interval in seconds to send requests")
+	maxCrashDuration := flag.Int("crash", 0, "maximum duration to wait before crashing")
+	caPath := flag.String("ca-path", "", "path to the CA certificate")
+	flag.Parse()
+
+	if *maxCrashDuration != 0 {
+		setupCrashRoutine(*maxCrashDuration)
+	}
+	client := getClient(*caPath)
+
+	for true {
+		makeRequest(client, *requestUrl)
+		time.Sleep(time.Duration(*requestInterval) * time.Second)
 	}
 
-	pathCa := os.Getenv("PATH_CA")
+	return 0
+}
 
+func makeRequest(client http.Client, requestUrl string) {
+	resp, err := client.Get(requestUrl)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	data, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("Error requesting [%v]: %v", requestUrl, err)
+	}
+
+	log.Println(string(data))
+}
+
+func getClient(pathCa string) http.Client {
 	var client http.Client
 	if pathCa != "" {
 		fileCa, err := ioutil.ReadFile(pathCa)
@@ -38,19 +69,16 @@ func realMain() int {
 	} else {
 		client = *http.DefaultClient
 	}
+	return client
+}
 
-	resp, err := client.Get(serviceAddr)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer resp.Body.Close()
+func setupCrashRoutine(maxCrashDuration int) {
+	rand.Seed(time.Now().Unix())
+	crashDuration := rand.Intn(maxCrashDuration)
 
-	data, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	log.Println(string(data))
-
-	return 0
+	log.Printf("Crashing in [%v] seconds", crashDuration)
+	go func() {
+		time.Sleep(time.Duration(crashDuration) * time.Second)
+		log.Fatal("Crashing...")
+	}()
 }
