@@ -26,15 +26,15 @@ func main() {
 }
 
 func realMain() int {
-	clientOpts := &Client{}
-	clientOpts.parseArgs()
+	client := &Client{}
+	client.parseArgs()
 
-	clientOpts.setupCrashRoutine(clientOpts.maxCrashDuration)
-	clientOpts.setupClient(clientOpts.caPath)
+	client.setupCrashRoutine(client.maxCrashDuration)
+	client.setupClient(client.caPath)
 
 	for true {
-		clientOpts.makeRequest(clientOpts.requestUrl)
-		time.Sleep(time.Duration(clientOpts.requestInterval) * time.Second)
+		client.makeRequest(client.requestUrl)
+		time.Sleep(time.Duration(client.requestInterval) * time.Second)
 	}
 
 	return 0
