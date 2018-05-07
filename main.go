@@ -12,11 +12,13 @@ import (
 	"time"
 )
 
-type ClientOpts struct {
+type Client struct {
 	requestUrl       string
 	requestInterval  int
 	maxCrashDuration int
 	caPath           string
+
+	httpClient http.Client
 }
 
 func main() {
@@ -24,24 +26,22 @@ func main() {
 }
 
 func realMain() int {
-	clientOpts := &ClientOpts{}
-	parseArgs(clientOpts)
+	clientOpts := &Client{}
+	clientOpts.parseArgs()
 
-	if clientOpts.maxCrashDuration != 0 {
-		setupCrashRoutine(clientOpts.maxCrashDuration)
-	}
-	client := getClient(clientOpts.caPath)
+	clientOpts.setupCrashRoutine(clientOpts.maxCrashDuration)
+	clientOpts.setupClient(clientOpts.caPath)
 
 	for true {
-		makeRequest(client, clientOpts.requestUrl)
+		clientOpts.makeRequest(clientOpts.requestUrl)
 		time.Sleep(time.Duration(clientOpts.requestInterval) * time.Second)
 	}
 
 	return 0
 }
 
-func makeRequest(client http.Client, requestUrl string) {
-	resp, err := client.Get(requestUrl)
+func (c *Client) makeRequest(requestUrl string) {
+	resp, err := c.httpClient.Get(requestUrl)
 	if err != nil {
 		log.Printf("Error requesting [%v]: %v", requestUrl, err)
 		return
@@ -60,8 +60,7 @@ func makeRequest(client http.Client, requestUrl string) {
 	log.Printf("Request to [%v] returned [%v]: %v", requestUrl, resp.StatusCode, string(data))
 }
 
-func getClient(pathCa string) http.Client {
-	var client http.Client
+func (c *Client) setupClient(pathCa string) {
 	if pathCa != "" {
 		fileCa, err := ioutil.ReadFile(pathCa)
 		if err != nil {
@@ -74,28 +73,31 @@ func getClient(pathCa string) http.Client {
 		tlsConfig := &tls.Config{RootCAs: certPool}
 		tlsConfig.BuildNameToCertificate()
 		transport := &http.Transport{TLSClientConfig: tlsConfig}
-		client = http.Client{Transport: transport}
+		c.httpClient = http.Client{Transport: transport}
 	} else {
-		client = *http.DefaultClient
+		c.httpClient = *http.DefaultClient
 	}
-	return client
 }
 
-func setupCrashRoutine(maxCrashDuration int) {
+func (c *Client) parseArgs() {
+	flag.StringVar(&c.requestUrl, "request-url", "", "URL to request")
+	flag.IntVar(&c.requestInterval, "request-interval", 1, "interval in seconds to send requests")
+	flag.IntVar(&c.maxCrashDuration, "crash", 0, "maximum duration to wait before crashing (default \"0\" - e.g. don't crash on purpose)")
+	flag.StringVar(&c.caPath, "ca-path", "", "path to the CA certificate to verify the server's certificate (default \"\")")
+	flag.Parse()
+}
+
+func (c *Client) setupCrashRoutine(maxCrashDuration int) {
+	if c.maxCrashDuration == 0 {
+		return
+	}
+
 	rand.Seed(time.Now().Unix())
-	crashDuration := rand.Intn(maxCrashDuration)
+	crashDuration := rand.Intn(c.maxCrashDuration)
 
 	log.Printf("Crashing in [%v] seconds...", crashDuration)
 	go func() {
 		time.Sleep(time.Duration(crashDuration) * time.Second)
-		log.Fatal("Crashing...")
+		log.Fatal("Crashing NOW...")
 	}()
-}
-
-func parseArgs(client *ClientOpts) {
-	flag.StringVar(&client.requestUrl, "request-url", "", "URL to request")
-	flag.IntVar(&client.requestInterval, "request-interval", 1, "interval in seconds to send requests")
-	flag.IntVar(&client.maxCrashDuration, "crash", 0, "maximum duration to wait before crashing")
-	flag.StringVar(&client.caPath, "ca-path", "", "path to the CA certificate")
-	flag.Parse()
 }
